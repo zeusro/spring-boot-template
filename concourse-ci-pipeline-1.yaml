@@ -1,0 +1,99 @@
+resources:
+- name: dev-repo
+  type: git
+  source:
+    uri: ((repouri))
+    branch: develop
+    private_key: ((repo-key))
+
+- name: dependency1
+  type: git
+  source:
+    uri: ((dependency1uri))
+    branch: master
+    private_key: ((repo-key))
+
+- name: dev-image
+  type: docker-image
+  source:
+    repository: registry-vpc.cn-shenzhen.aliyuncs.com/((image-name))
+    tag: latest
+    username: ((image-username))
+    password: ((image-password))
+    insecure_registries:
+    - registry-vpc.cn-shenzhen.aliyuncs.com
+
+jobs:
+- name: dev-build
+  serial: true
+  public: true
+  plan:
+  - aggregate:
+    - get: dev-repo
+      trigger: true
+    - get: dependency1
+      trigger: true
+
+  - task: install-maven-dependency1
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: registry-vpc.cn-shenzhen.aliyuncs.com/amiba/openjdk
+          tag: 8-tools
+          username: ((image-username))
+          password: ((image-password))
+          insecure_registries:
+          - registry.cn-shenzhen.aliyuncs.com
+      inputs:
+      - name: dependency1
+      outputs:
+      - name: maven-dependency
+      run:
+        path: sh
+        args:
+        - -ec
+        - |
+          cd dependency1
+          mvn install -Dmaven.test.skip=true
+          cp -r /root/.m2/repository/* ../maven-dependency
+
+  - task: dev-jar
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: registry-vpc.cn-shenzhen.aliyuncs.com/amiba/openjdk
+          tag: 8-tools
+          username: ((image-username))
+          password: ((image-password))
+          insecure_registries:
+          - registry.cn-shenzhen.aliyuncs.com
+      inputs:
+      - name: dev-repo
+      - name: maven-dependency
+      outputs:
+      - name: dev-resource
+      run:
+        path: sh
+        args:
+        - -ec
+        - |
+          mkdir -p /root/.m2/repository
+          cp -rf maven-dependency/* /root/.m2/repository
+          cd dev-repo
+          mvn install -Dmaven.test.skip=true
+          cp web/target/((jarfile)) ../dev-resource/app.jar
+          cp web/Dockerfile ../dev-resource/Dockerfile
+
+  - put: dev-image
+    params:
+      build: dev-resource
+      build_args:
+        JAR_FILE: app.jar
+    get_params:
+      skip_download: true
+
+
