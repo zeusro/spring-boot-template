@@ -5,6 +5,7 @@ spring boot 2.x 模板,附带了Concourse-CI的构建模板
 
 maven分支那里附带了一个私有依赖,那个忽略即可.
 
+- fly命令
 ```bash
 fly  -t zeusro set-pipeline -p spring-boot-template -c concourse-ci-pipeline.yaml \
 -v "name=spring-boot-template" \
@@ -16,6 +17,7 @@ fly  -t zeusro set-pipeline -p spring-boot-template -c concourse-ci-pipeline.yam
 -v 'image-password=<登录镜像的密码>'  ;
 ```
 
+- 插件构建的方式
 ``` bash
 gradle build -x test --debug docker ;
 # 或者
