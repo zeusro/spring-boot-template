@@ -1,0 +1,4 @@
+rootProject.name = 'spring-boot-template'
+include 'web'
+
+project(':web').projectDir = "$rootDir/web" as File

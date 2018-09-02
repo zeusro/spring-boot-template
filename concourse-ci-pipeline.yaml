@@ -1,0 +1,91 @@
+resources:
+- name: openjdk-image
+  type: docker-image
+  source:
+    repository: registry-vpc.cn-shenzhen.aliyuncs.com/amiba/openjdk
+    tag: 8-tools
+    username: ((image-username))
+    password: ((image-password))
+    insecure_registries:
+    - registry-vpc.cn-shenzhen.aliyuncs.com
+
+- name: dependency1
+  type: git
+  source:
+    uri: ((dependency1uri))
+    branch: master
+    private_key: ((repo-key))
+
+- name: dev-repo
+  type: git
+  source:
+    uri: ((repouri))
+    branch: master
+    private_key: ((repo-key))
+
+- name: dev-image
+  type: docker-image
+  source:
+    repository: registry-vpc.cn-shenzhen.aliyuncs.com/((image-name))
+    tag: latest
+    username: ((image-username))
+    password: ((image-password))
+    insecure_registries:
+    - registry-vpc.cn-shenzhen.aliyuncs.com
+
+jobs:
+
+- name: dev-build
+  serial: true
+  public: true
+  plan:
+  - aggregate:
+    - get: dev-repo
+      trigger: true
+    - get: dependency1
+    - get: openjdk-image
+      params:
+        save: true
+
+  - task: dev-jar
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: registry-vpc.cn-shenzhen.aliyuncs.com/amiba/openjdk
+          tag: 8-tools
+          username: ((image-username))
+          password: ((image-password))
+          insecure_registries:
+          - registry.cn-shenzhen.aliyuncs.com
+      inputs:
+        - name: dependency1
+        - name: dev-repo
+      outputs:
+      - name: dev-resource
+      caches:
+        - path: dependency-cache-1
+      run:
+        path: sh
+        args:
+        - -ec
+        - |
+          ln -s "$(pwd)/dependency-cache-1" "${HOME}/.m2"
+          ln -s "$(pwd)/dependency-cache-1" "${HOME}/.gradle"
+          cd dependency1
+          mvn install -Dmaven.test.skip=true
+          cd ../dev-repo
+          gradle build -x test;
+          cp web/build/libs/app.jar ../dev-resource/app.jar
+          cp web/Dockerfile ../dev-resource/Dockerfile
+
+  - put: dev-image
+    params:
+      load_bases:
+         - openjdk-image
+      build: dev-resource
+      build_args:
+        JAR_FILE: app.jar
+    get_params:
+      skip_download: true
